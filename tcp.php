@@ -53,7 +53,7 @@ class TCP{
 
 		return fgets( $this->fd ); 
 	}
-	private function __destruct( ){
+	public function __destruct( ){
 
 		if( $this->fd !== NULL ) fclose( $this->fd );
 	}
